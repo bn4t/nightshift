@@ -38,6 +38,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         installSignalHandlers()
+
+        #if DEBUG
+        // Test hook: open Settings the way the menu does, without a LaunchServices reopen
+        // (which would activate the app for us and hide focus bugs).
+        DistributedNotificationCenter.default().addObserver(
+            forName: .init("dev.nightshift.debug.showSettings"), object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.settingsWindow.show() }
+        }
+        #endif
         if firstRun { settingsWindow.show() }
     }
 

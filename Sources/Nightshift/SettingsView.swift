@@ -22,11 +22,36 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func show() {
         if window == nil { window = makeWindow() }
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        guard let window else { return }
+        let becomingRegular = NSApp.activationPolicy() != .regular
+        if becomingRegular { NSApp.setActivationPolicy(.regular) }
+
         // Don't drop the user into the first text field.
-        window?.makeFirstResponder(nil)
+        window.makeFirstResponder(nil)
+        bringToFront()
+
+        // Switching from menu-bar-only to a regular app completes asynchronously and
+        // re-sorts our windows behind the active app's, which is what left Settings in the
+        // background. Re-assert once the switch has gone through.
+        if becomingRegular {
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated { self?.bringToFront() }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                MainActor.assumeIsolated { self?.bringToFront() }
+            }
+        }
+    }
+
+    private func bringToFront() {
+        guard let window else { return }
+        // `activate()` (macOS 14+) is only a request that cooperative activation may
+        // decline. The user explicitly asked for this window, so activate regardless.
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        // From an app that isn't active (yet), orderFront places the window *behind* the
+        // active app's windows; this puts it on top unconditionally.
+        window.orderFrontRegardless()
     }
 
     func windowWillClose(_ notification: Notification) {
